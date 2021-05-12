@@ -1,0 +1,124 @@
+---
+title: "Organizing ROMS data for SDM fitting"
+author: "Owen Liu"
+date: "5/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(tidync)
+library(here)
+library(zoo)
+library(lubridate)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Purpose
+
+The purpose of this script is to import and organize ROMS environmental data, and join it to west coast trawl survey data through customizable scripts for choosing species and derived environmental variables of interest (e.g., 1 month-lagged bottom temperature).
+
+As of May 11, 2021, there are 6 ROMS projection files, reporting either bottom temperature or bottom oxygen associated with either the Hadley, GFDL, or IPSL GCM projections.
+
+# Organize Hindcast Data
+
+The hindcast data includes a timeseries of bottom temperature and bottom oxygen matched to trawl survey locations
+
+```{r}
+# trawl survey locations and times
+trawl <- read_csv(here('data','trawl_survey_locations.csv'),col_types = 'cddddd') %>% 
+  mutate(date=as_date(date))
+
+# hindcast netCDF
+hindcast_file <- tidync(here('data','trawl_roms_matchup_timeseries.nc'))
+```
+
+```{r}
+# matched ROMS hindcast data
+hindcast <- hindcast_file %>% hyper_tibble()
+
+glimpse(hindcast)
+
+# and the trawl stations
+trawlID <- hindcast_file %>% activate("D0") %>% hyper_tibble()
+glimpse(trawlID)
+
+# join trawl info to hindcast data
+hindcast <- hindcast %>% left_join(trawlID, by="station")
+glimpse(hindcast)
+```
+
+# Organize Projected Data
+
+The projected data corresponding to each of the 3 GCMs (Hadley, GFDL, IPSL) contain either temperature or oxygen, for the entire ROMS grid, and for every day from 1980-2100.
+
+For example, the Hadley bottom temperature projection: 
+
+```{r}
+bt_had <- tidync(here::here('data','bt_daily_roms_gfdl_1980_2100.nc'))
+bt_had
+```
+
+# Derive Environmental Variables
+
+We want to derive, from the trawl-matched ROMS outputs, some summarized environmental variables. We start by writing a function that can calculate, for each trawl location and time, a mean value for an environmental variable, at that location, over the past x days, where x can be anything. For the edge case at the beginning of the timeseries, to avoid losing data we will use the 'mean of the past x days or since the beginning of the timeseries.
+
+Since time is an integer day, it make it easier for us to calculate lags. For this function, we assume the dataframe has the exact variable names as the `hindcast` dataframe above.
+
+For calculating lagged means, we use the `zoo::rollapply` function.
+```{r}
+# using `zoo::rollapply`
+append_lag <- function(df,variable=temp_roms,lagdays=30){
+  df_out <- df %>% 
+    group_by(station) %>% # group the observations by trawl survey station
+    arrange(time) %>% 
+    # calculate the lag
+    mutate("mean_{{variable}}_{{lagdays}}":= rollapply({{variable}}, # variable to lag
+                                                       FUN=mean, # function to apply
+                                                       align='right', # tells the function to lag, not lead
+                                                       width=lagdays, # how big of a window
+                                                       fill=NA, # value to fill when an observation doesn't exist
+                                                       partial=1, # minimum window size for partial computations
+                                                       na.rm=T)) %>% 
+    ungroup()
+  
+  df_out
+}
+```
+
+A quick test
+```{r}
+testdf <- hindcast %>% slice(1:100000)
+test <- append_lag(testdf)
+
+glimpse(test)
+```
+
+Apply to temperature and oxygen for the entire dataset
+
+```{r}
+t <- proc.time()
+hindcast_lagged_temp_oxy <- hindcast %>% 
+  append_lag(variable=temp_roms,lagdays=30) %>% 
+  append_lag(variable=oxygen_roms,lagdays=30) %>% 
+  ungroup()
+proc.time()-t
+
+# took about 25m to calculate both lags
+glimpse(hindcast_lagged_temp_oxy)
+```
+
+How does concurrent temp/oxygen compare to lagged mean temp/oxy?
+
+```{r}
+# take a random subsample so it doesn't take forever to plot
+samp <- hindcast_lagged_temp_oxy %>% 
+  ungroup() %>% 
+  slice_sample(n=10000)
+samp %>% 
+  ggplot(aes(temp_roms,mean_temp_roms_30))+
+  geom_point()+geom_smooth(method='lm')+
+  labs(x="Concurrent Temperature",y="30 Day Lagged Mean Temperature")
+```
+
+
