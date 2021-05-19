@@ -11,6 +11,7 @@ library(tidync)
 library(here)
 library(zoo)
 library(lubridate)
+library(here)
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
@@ -26,11 +27,12 @@ The hindcast data includes a timeseries of bottom temperature and bottom oxygen 
 
 ```{r}
 # trawl survey locations and times
-trawl <- read_csv(here('data','trawl_survey_locations.csv'),col_types = 'cddddd') %>% 
+trawl <- read_csv(here::here('data','trawl_survey_locations.csv'),col_types = 'cddddd') %>% 
   mutate(date=as_date(date))
 
 # hindcast netCDF
-hindcast_file <- tidync(here('data','trawl_roms_matchup_timeseries.nc'))
+hindcast_file <- tidync(here::here('data','trawl_roms_matchup_timeseries.nc'))
+
 ```
 
 ```{r}
@@ -50,16 +52,53 @@ glimpse(hindcast)
 
 # Organize Projected Data
 
-The projected data corresponding to each of the 3 GCMs (Hadley, GFDL, IPSL) contain either temperature or oxygen, for the entire ROMS grid, and for every day from 1980-2100.
+The projected data corresponding to each of the 3 GCMs (Hadley, GFDL, IPSL) contain either bottom temperature or oxygen, for the entire ROMS grid, and for every day from 1980-2100.
 
 For example, the Hadley bottom temperature projection: 
 
 ```{r}
 bt_had <- tidync(here::here('data','bt_daily_roms_gfdl_1980_2100.nc'))
 bt_had
+
+# projected netCDFs
+
+#list.files("/Users/jameal.samhouri/Documents/Future Seas")
+
+## bottom temperature
+t_gfdl_file <- tidync(here::here('data','bt_daily_roms_gfdl_1980_2100.nc')) #tidync("/Users/jameal.samhouri/Documents/Future Seas/bt_daily_roms_gfdl_1980_2100.nc")
+t_hadl_file <- tidync(here::here('data','bt_daily_roms_had_1980_2100.nc'))
+t_ipsl_file <- tidync(here::here('data','bt_daily_roms_ipsl_1980_2100.nc'))
+
+## bottom oxygen
+o_gfdl_file <- tidync(here::here('data','oxygen_bottom_daily_roms_gfdl_1980_2100.nc'))
+o_hadl_file <- tidync(here::here('data','oxygen_bottom_daily_roms_had_1980_2100.nc'))
+o_ipsl_file <- tidync(here::here('data','oxygen_bottom_daily_roms_ipsl_1980_2100.nc'))
+
+#glimpse(t_gfdl_file)
+
+# extract netcdf files as expanded tables. takes 15-20min on jameal's imac
+# t_gfdl <- t_gfdl_file %>% hyper_tibble()
+# 
+# glimpse(t_gfdl)
+# 
+# # make it smaller
+# t_gfdl_slice <- t_gfdl %>% slice(1:100000)
+# rm(t_gfdl, t_gfdl_file)
+# write_rds(t_gfdl_slice, here::here('data','t_gfdl_slice.rds'))
+
+t_gfdl_slice <- read_rds(here::here('data','t_gfdl_slice.rds'))
+glimpse(t_gfdl_slice)
+
+####################################
+#### MESSAGE FOR JAMEAL AND OWEN ###
+####################################
+
+### GO BACK TO LINE 79. We need to return to Heather Welch's code that Jameal modified for the FATE spatial indicators project, and remember how to extract real lat-long coordinates for each cell rather than just dummy identifiers. We also need to figure out how to make hyper_tibble() extract a calendar date column rather than just a year column called time.
+
+
 ```
 
-# Derive Environmental Variables
+# Derive Environmental Variables - Hindcast
 
 We want to derive, from the trawl-matched ROMS outputs, some summarized environmental variables. We start by writing a function that can calculate, for each trawl location and time, a mean value for an environmental variable, at that location, over the past x days, where x can be anything. For the edge case at the beginning of the timeseries, to avoid losing data we will use the 'mean of the past x days or since the beginning of the timeseries.
 
@@ -121,4 +160,28 @@ samp %>%
   labs(x="Concurrent Temperature",y="30 Day Lagged Mean Temperature")
 ```
 
+# Derive Environmental Variables - Projections
+
+We want to derive, from the ROMS projection outputs, some summarized environmental variables. We start by writing a function that can calculate, for each grid cell in the ROMS domain, a mean/97.5%/2.5% value for an environmental variable, at that location, between the start.month and end.month, where start.month and end.month can be anything (but months in the range May-October make the most sense because that is when the trawl survey occurs). 
+
+Since time is just a year right now, we take the mean for each year. For this function, we assume the dataframe has the exact variable names as the `t_gfdl_slice` dataframe above.
+
+Also I did not yet make this a function!
+
+
+```{r}
+
+t_gfdl_slice_summary <- t_gfdl_slice %>%
+  mutate(
+    grid_id = paste0(latitude,"_",longitude)
+  ) %>%
+  group_by(grid_id, time) %>%
+  summarise(
+    bt_mean = mean(bt),
+    bt_upper = quantile(bt, probs=(0.975)),
+    bt_lower = quantile(bt, probs=(0.025))
+  )
+glimpse(t_gfdl_slice_summary)
+
+```
 
