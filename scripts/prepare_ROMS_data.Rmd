@@ -71,6 +71,7 @@ The first step is to convert ROMS GCM netcdf files into rasters.
 
 n_cov_models <- 6 # 2 covariates * 3 models
 cov <- 6 # position of the covariate of interest in the ncdf
+gcm_options <- c("gfdl", "had", "ipsl")
 
 #Dimensions:
 #1452 years: 1980 - 2100 (121 years * 12 months)
@@ -105,40 +106,59 @@ for (f in c(1:n_cov_models)){
   # this step is slow. 169.131 s on Jameal's iMac
   t2 <- proc.time()
   tmp.array <- ncvar_get(nc,name)
-  proc.time()-t2
+  print(paste0("time to open ncdf: ", proc.time()-t2))
+  
+  #Forcing resolution our ROMS template (a quick fix to resolve grid edge vs. mid point)
+  template <- raster(here::here('data','Bathymetry ETOPO1','template.grd')) 
 
-  #Loop through every time step in ncdf. 
+  #Loop through every time step in ncdf and make a raster file.
+  
+  dir.create(here::here('data','Projection Rasters','Rasters_2d_daily'),showWarnings = FALSE)
+  
   for (i in 1:n_yr_mth_days){
-    r <- raster(t(tmp.array[,,i]),
-                xmn=min(lon), xmx=max(lon),
-                ymn=min(lat), ymx=max(lat), 
-                crs=CRS("+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"))
-    r <- flip(r,2)
-    #Forcing resolution our ROMS template (a quick fix to resolve grid edge vs. mid point)
-    template = raster(here::here('data','Bathymetry ETOPO1','template.grd')) 
-    r <- raster::resample(r, template, method="bilinear")  
-    # plot(r)
-    
+    t3 <- proc.time()
     #create nested folders to save files
     #First create GCM folder
-    gcm_options <- c("gfdl", "had", "ipsl")
     gcm_name <- unlist(strsplit(files_short[f],"_"))
     index <- which(gcm_name %in% gcm_options)
     gcm_folder <- gcm_name[index]
-    dir.create(here::here('data','Projection Rasters','Rasters_2d_daily'),showWarnings = FALSE)
     dir.create(here::here('data','Projection Rasters','Rasters_2d_daily',gcm_folder), showWarnings = FALSE)
     
     var <- unlist(strsplit(files_short[f],"_"))[1:2]
     folder <- here::here('data','Projection Rasters','Rasters_2d_daily',gcm_folder,paste(var[1],var[2],sep="_"))
     dir.create(folder, showWarnings = FALSE)
     
+    r <- raster(t(tmp.array[,,i]),
+                xmn=min(lon), xmx=max(lon),
+                ymn=min(lat), ymx=max(lat), 
+                crs=CRS("+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"))
+    r <- flip(r,2)
+    r <- raster::resample(r, template, method="bilinear")  
+    # plot(r)
+    
+    # #create nested folders to save files
+    # #First create GCM folder
+    # gcm_options <- c("gfdl", "had", "ipsl")
+    # gcm_name <- unlist(strsplit(files_short[f],"_"))
+    # index <- which(gcm_name %in% gcm_options)
+    # gcm_folder <- gcm_name[index]
+    # dir.create(here::here('data','Projection Rasters','Rasters_2d_daily'),showWarnings = FALSE)
+    # dir.create(here::here('data','Projection Rasters','Rasters_2d_daily',gcm_folder), showWarnings = FALSE)
+    # 
+    # var <- unlist(strsplit(files_short[f],"_"))[1:2]
+    # folder <- here::here('data','Projection Rasters','Rasters_2d_daily',gcm_folder,paste(var[1],var[2],sep="_"))
+    # dir.create(folder, showWarnings = FALSE)
+    # 
     #create name of raster file
     #month_num <- format(as.Date(paste("1666",month[i],"06",sep="-"),"%Y-%m-%d"), "%m") # 1666 and 6 are arbitrary choices, goal is just to extract a 2 digit month
     fname <- paste0(var[1],"_",var[2],"_",gcm_folder,"_date_",roms_ymd[i],".grd")
     #save raster
     writeRaster(r, paste0(folder,"/", fname), overwrite=TRUE)
+    rm(r)
+    print(paste0("finished: ", fname))
   }
   nc_close(nc)
+  print(paste0("time to complete raster generation for 1 model-covariate: ", proc.time()-t3))
 }
 proc.time()-t
 
