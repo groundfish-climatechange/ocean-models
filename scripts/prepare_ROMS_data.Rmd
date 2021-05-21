@@ -99,7 +99,7 @@ for (f in c(1:n_cov_models)){
   year <- ncvar_get(nc, 'year') 
   month <- ncvar_get(nc, 'month')
   day <- ncvar_get(nc,'day')
-  roms_ymd <- as.POSIXct(paste(yr,mth,day,sep='-'),tz='UTC')
+  roms_ymd <- as.POSIXct(paste(year,month,day,sep='-'),tz='UTC')
   name <-  names(nc$var)[cov]
   
   # this step is slow. 169.131 s on Jameal's iMac
