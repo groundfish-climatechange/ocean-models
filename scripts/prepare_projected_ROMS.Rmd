@@ -1,0 +1,276 @@
+---
+title: "Organizing projected ROMS outputs for SDM fitting"
+author: "Jameal Samhouri"
+date: "5/24/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(tidync)
+library(here)
+#library(zoo)
+library(lubridate)
+library(here)
+library(ncdf4)
+library(raster)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Purpose
+
+The purpose of this script is to import and organize ROMS environmental outputs, and join it to west coast trawl survey data through customizable scripts for choosing species and derived environmental variables of interest (e.g., 1 month-lagged bottom temperature).
+
+As of May 11, 2021, there are 6 ROMS projection files, reporting either bottom temperature or bottom oxygen associated with either the Hadley, GFDL, or IPSL GCM projections.
+
+# Organize Projected Data
+
+The projected data corresponding to each of the 3 GCMs (Hadley, GFDL, IPSL) contain either bottom temperature or oxygen, for the entire ROMS grid, and for every day from 1980-2100. Note: 1980-2010 are not observed values. 1980-present should not be compared to observations since the interannual variability will not match up (by design). 
+
+Files provided by Mike Jacox. Use beyond the Packard groundfish climate change project requires permission by Mike Jacox (michael.jacox@noaa.gov)
+
+I adapted the code below from Steph Brodie's original work. https://github.com/stephbrodie1/WRAP_Location_CaseStudy/blob/master/Create_ROMS_Rasters.R
+
+The first step is to convert ROMS GCM netcdf files into rasters.
+
+NOTE: this is VERY computationally expensive and should only be run once, if at all.
+
+```{r}
+# projected netCDFs
+
+
+#6 variables: lon, lat, year, month, day, covariate. the 6th variable is the covariate
+#2 covariates: bottom temp, bottom oxygen
+#3 global climate models: Hadley, IPSL, GFDL
+
+n_cov_models <- 6 # 2 covariates * 3 models
+cov <- 6 # position of the covariate of interest in the ncdf
+gcm_options <- c("gfdl", "had", "ipsl")
+
+#Dimensions:
+#1452 years: 1980 - 2100 (121 years * 12 months)
+#1452 months: 1 - 12 (121 years * 12 months)
+#44195 days: 1980-2100 (121 years * 365.2479 days per year)
+#181 lats: 30 - 48 degrees north @ 0.1 degree resolution
+#186 lons: 115.5 - 134 degrees west @ 0.1 degree resolution
+
+n_yr_mth_days <- 44195
+
+
+#-----Load in projection output files----
+#note: download files locally
+
+files_long <- list.files(here::here('data','Projection NCDFs'),full.names = TRUE)
+files_short <- list.files(here::here('data','Projection NCDFs'),full.names = FALSE)
+
+t <- proc.time()
+for (f in c(1:n_cov_models)){ 
+  print(files_long[f])
+  nc <- nc_open(files_long[f])
+  
+  # print(nc) #run if you want more details on file
+  lat <- ncvar_get(nc, 'lat'); lat <- lat[1,]
+  lon <- ncvar_get(nc, 'lon'); lon <- lon[,1]
+  year <- ncvar_get(nc, 'year') 
+  month <- ncvar_get(nc, 'month')
+  day <- ncvar_get(nc,'day')
+  roms_ymd <- as.POSIXct(paste(year,month,day,sep='-'),tz='UTC')
+  name <-  names(nc$var)[cov]
+  
+  # this step is slow. 169.131 s on Jameal's iMac
+  # t2 <- proc.time()
+  tmp.array <- ncvar_get(nc,name)
+  # print(paste0("time to open ncdf: ", proc.time()-t2['elapsed'][[1]]))
+  
+  #Forcing resolution our ROMS template (a quick fix to resolve grid edge vs. mid point)
+  template <- raster(here::here('data','Bathymetry ETOPO1','template.grd')) 
+
+  #Loop through every time step in ncdf and make a raster file.
+  
+  dir.create(here::here('data','Projection Rasters','Rasters_2d_daily'),showWarnings = FALSE)
+  
+  for (i in 1:n_yr_mth_days){ #1:3){
+    # t3 <- proc.time()
+    #create nested folders to save files
+    #First create GCM folder
+    gcm_name <- unlist(strsplit(files_short[f],"_"))
+    index <- which(gcm_name %in% gcm_options)
+    gcm_folder <- gcm_name[index]
+    dir.create(here::here('data','Projection Rasters','Rasters_2d_daily',gcm_folder), showWarnings = FALSE)
+    
+    var <- unlist(strsplit(files_short[f],"_"))[1:2]
+    folder <- here::here('data','Projection Rasters','Rasters_2d_daily',gcm_folder,paste(var[1],var[2],sep="_"))
+    dir.create(folder, showWarnings = FALSE)
+    
+    # now make the raster
+    r <- raster(t(tmp.array[,,i]),
+                xmn=min(lon), xmx=max(lon),
+                ymn=min(lat), ymx=max(lat), 
+                crs=CRS("+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"))
+    r <- flip(r,2)
+    r <- raster::resample(r, template, method="bilinear")  
+    # plot(r)
+    
+    #create name of raster file
+    #month_num <- format(as.Date(paste("1666",month[i],"06",sep="-"),"%Y-%m-%d"), "%m") # 1666 and 6 are arbitrary choices, goal is just to extract a 2 digit month
+    fname <- paste0(var[1],"_",var[2],"_",gcm_folder,"_date_",roms_ymd[i],".grd")
+    
+    #save raster
+    writeRaster(r, paste0(folder,"/", fname), overwrite=TRUE)
+    rm(r)
+    print(paste0("finished: ", fname))
+  }
+  nc_close(nc)
+  # print(paste0("time to complete raster generation for 1 model-covariate: ", proc.time()-t3))
+}
+proc.time()-t
+
+### GRAVEYARD ###
+# all code in this chunk below here is legacy of attempts by jameal to unpack the ncdf's
+
+# 
+# ## bottom temperature
+# t_gfdl_file <- tidync(here::here('data','bt_daily_roms_gfdl_1980_2100.nc')) #tidync("/Users/jameal.samhouri/Documents/Future Seas/bt_daily_roms_gfdl_1980_2100.nc")
+# t_hadl_file <- tidync(here::here('data','bt_daily_roms_had_1980_2100.nc'))
+# t_ipsl_file <- tidync(here::here('data','bt_daily_roms_ipsl_1980_2100.nc'))
+# 
+# ## bottom oxygen
+# o_gfdl_file <- tidync(here::here('data','oxygen_bottom_daily_roms_gfdl_1980_2100.nc'))
+# o_hadl_file <- tidync(here::here('data','oxygen_bottom_daily_roms_had_1980_2100.nc'))
+# o_ipsl_file <- tidync(here::here('data','oxygen_bottom_daily_roms_ipsl_1980_2100.nc'))
+
+#glimpse(t_gfdl_file)
+
+# # use this to determine varname. hoping we can varname="bt"
+# tidync(t_gfdl_file)
+# print(t_gfdl_file) #https://ropensci.org/blog/2019/11/05/tidync/ # we wantbt from 1st grid, lon and lat from 2nd grid, year/month/day from 3rd grid
+# 
+# nc.data <- nc_open(here::here('data','bt_daily_roms_gfdl_1980_2100.nc'), write=FALSE)
+# lat <- ncvar_get(nc.data,'lat'); lat <- lat[1,]
+# lon <- ncvar_get(nc.data,'lon'); lon <- lon[,1]
+# yr <- ncvar_get(nc.data,'year')
+# mth <- ncvar_get(nc.data,'month')
+# day <- ncvar_get(nc.data,'day')
+# tim <- as.POSIXct(paste(yr,mth,day,sep='-'),tz='UTC')
+# name <-  names(nc.data$var)[6]
+# 
+# t <- proc.time()
+# tmp.array <- ncvar_get(nc.data,name)
+# proc.time()-t
+# 
+# 
+# # extract netcdf files as expanded tables. takes 15-20min on jameal's imac
+# t <- proc.time()
+# 
+# # this approach gave a tibble with columns bt, longitude, latitude, time. lon/lat were index values, time was a year
+# t_gfdl <- t_gfdl_file %>% 
+#   activate("D0,D1,D2") %>%
+#   hyper_tibble()
+# 
+# proc.time()-t
+# 
+# glimpse(t_gfdl)
+# 
+# t_gfdl2 <- t_gfdl_file %>% 
+#   #activate("D0,D1") %>%
+#   hyper_tibble()
+# 
+# # # make it smaller
+# # t_gfdl_slice <- t_gfdl %>% slice(1:100000)
+# # rm(t_gfdl, t_gfdl_file)
+# # write_rds(t_gfdl_slice, here::here('data','t_gfdl_slice.rds'))
+# 
+# t_gfdl_slice <- read_rds(here::here('data','t_gfdl_slice.rds'))
+# glimpse(t_gfdl_slice)
+
+
+```
+
+# Derive Environmental Variables - Projections
+
+We want to derive, from the ROMS projection outputs, some summarized environmental variables. We write some loops that can calculate, for each grid cell in the ROMS domain, a mean/97.5%/2.5% value for an environmental variable, at that location, between the files_survey_months_pattern, where files_survey_months_pattern can be anything (but months in the range May-October make the most sense because that is when the trawl survey occurs). 
+
+Since time is just a year right now, we take the mean for each year. For this function, we assume the dataframe has the exact variable names as the `t_gfdl_slice` dataframe above.
+
+## Make annual rasters
+
+```{r}
+
+#----Create May-Oct Average Conditions----
+#For each year and variable, load in daily data from May-Oct and average. Output to a new folder. 
+
+years <- seq(1980,2100,1)
+nyears <- length(years)
+gcm_options <- c("gfdl", "had", "ipsl")
+variables <- c("oxygen_bottom","bt_daily")
+files_survey_months_pattern <- c("-05-","-06-","-07-","-08-","-09-","-10-") # trawl survey months are May-Oct 
+
+
+for (k in 1:length(variables)){
+  
+  print(variables[k])
+  
+  for (i in 1:length(gcm_options)){
+    
+    print(gcm_options[i])
+          
+    files <- list.files(paste0(here::here('data','Projection Rasters','Rasters_2d_daily',gcm_options[i],variables[k])), pattern=".grd" , full.names = TRUE)
+    
+    files_survey_months <- files[Reduce("|", lapply(files_survey_months_pattern, function(x) grepl(x, files)))] #https://stackoverflow.com/questions/50681248/filter-a-list-of-files-by-date-string
+    
+    ### NOTE: COME BACK TO CHECK THAT THE LINE ABOVE PULLS ONLY THE CORRECT FILES
+    
+    start_indx <- 1979
+    
+    for(j in 1: nyears){
+      
+      # NEXT STEP IS TO SUBSET TO FILES FOR EACH YEAR ONLY
+      
+      files_survey_months_tmp <- files_survey_months[Reduce("|", lapply(as.character(j+start_indx), function(x) grepl(x, files_survey_months)))]
+      
+      # LOAD RASTERS AS A STACK 
+      survey_months_rasters <- stack(files_survey_months_tmp)
+      
+      survey_r <- mean(survey_months_rasters)
+      
+      dir.create(here::here('data','Projection Rasters','Rasters_2d_Survey_Months'), showWarnings = FALSE)
+      writeRaster(survey_r,here::here('data','Projection Rasters','Rasters_2d_Survey_Months',paste0(gcm_options[i],'_',variables[k],'_SurveyMonths_',years[j],'.grd')), overwrite=TRUE)
+    }
+  }
+}
+
+# t_gfdl_slice_summary <- t_gfdl_slice %>%
+#   mutate(
+#     grid_id = paste0(latitude,"_",longitude)
+#   ) %>%
+#   group_by(grid_id, time) %>%
+#   summarise(
+#     bt_mean = mean(bt),
+#     bt_upper = quantile(bt, probs=(0.975)),
+#     bt_lower = quantile(bt, probs=(0.025))
+#   )
+# glimpse(t_gfdl_slice_summary)
+
+```
+
+## Make a dataframe out of the annual rasters
+
+Make an .rds we can  refer to that includes the lat, long for each cell in the ROMS domain along with the values for each covariate and each downscaled GCM. 
+
+It may make more sense to do this in the for loops above.
+
+```{r}
+
+```
+
+## Trawl survey locations
+
+This chunk is not yet used but putting it here for the future joins we may wish to do.
+```{r}
+
+# trawl survey locations and times
+trawl <- read_csv(here::here('data','trawl_survey_locations.csv'),col_types = 'cddddd') %>% 
+  mutate(date=as_date(date))
+
+```
+
