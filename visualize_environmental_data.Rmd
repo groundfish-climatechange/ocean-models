@@ -1,0 +1,136 @@
+---
+title: "Visualize Annual Environmental Data"
+author: "Owen Liu"
+date: "5/25/2021"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(tidync)
+library(here)
+library(zoo)
+library(lubridate)
+library(here)
+# library(ncdf4)
+library(raster)
+library(tabularaster)
+library(viridis)
+knitr::opts_chunk$set(echo = TRUE)
+options(dplyr.summarise.inform=F)
+```
+
+# Purpose
+
+Take the rasterized annual outputs from projected ROMS and visualize them with maps and timeseries. The environmental data have already been extracted and summarized for temperature and oxygen, such that the value for each cell has either mean bottom temperature or mean bottom oxygen, across the season from May to September(??).
+
+There are 6 projection types total, corresponding to three GCMs (IPSL, Hadley, and GFDL) and two environmental variables (temperature and oxygen)
+
+# Import Data
+
+Import the raster data into stacks
+
+```{r}
+# organize the file names we want to import
+x <- list.files(here('data','Projection Rasters','Rasters_2d_Survey_Months'),full.names=T,pattern = ".grd")
+gfdl_bt_fl <- x[grepl('gfdl_bt',x)]
+gfdl_o_fl <- x[grepl('gfdl_oxygen',x)]
+had_bt_fl <- x[grepl('had_bt',x)]
+had_o_fl <- x[grepl('had_oxygen',x)]
+ipsl_bt_fl <- x[grepl('ipsl_bt',x)]
+ipsl_o_fl <- x[grepl('ipsl_oxygen',x)]
+```
+
+
+# Visualize
+
+We'll try a few different visualizations, writing functions for each that:
+
+* import a raster stack using a list of file names (created above)
+* summarize the data somehow
+* output a plot or return a dataframe
+
+## Mean Conditions
+
+```{r}
+mean_raster <- function(file_list){
+  # import files into a raster stack
+  s <- stack(file_list)
+  # take the mean
+  m <- mean(s)
+  # label for plot
+  pt <- case_when(
+    grepl('ipsl_oxygen',file_list[1]) ~ "IPSL Oxygen",
+    grepl('ipsl_bt',file_list[1]) ~ "IPSL Temperature",
+    grepl('gfdl_oxygen',file_list[1]) ~ "GFDL Oxygen",
+    grepl('gfdl_bt',file_list[1]) ~ "GFDL Temperature",
+    grepl('had_oxygen',file_list[1]) ~ "HAD Oxygen",
+    grepl('had_bt',file_list[1]) ~ "HAD Temperature",
+  )
+  # plot
+  plot(m,main=pt,col=cividis(256))
+}
+```
+Try it out
+
+```{r}
+purrr::map(list(gfdl_bt_fl,had_bt_fl,ipsl_bt_fl,gfdl_o_fl,had_o_fl,ipsl_o_fl), mean_raster)
+```
+
+## Time Series
+
+First, a latitude-binned time series of mean values
+
+```{r}
+library(ggsci)
+plot_ts <- function(file_list,return_plot=T){
+  # import files into a raster stack
+  s <- stack(file_list)
+  yrs <- 1980:2100
+  # convert to tibble
+  sdf <- s %>% as_tibble(xy=T) %>% 
+    #split into bins
+    mutate(bin=findInterval(y,vec=seq(30,50,by=5)),
+           year=yrs[dimindex]) %>% 
+    # summarize by latitude bin
+    group_by(year,bin) %>% 
+    summarise(m=mean(cellvalue,na.rm=T)) %>% 
+    ungroup()
+  if(return_plot){
+    # create labels for latitude bins
+    sdf <- sdf %>% 
+      mutate(latbin=case_when(
+        bin==1 ~ "30-35",
+        bin==2 ~ "35-40",
+        bin==3 ~ "40-45",
+        bin==4 ~ ">45"
+      ))
+    # label for plot
+    pt <- case_when(
+      grepl('ipsl_oxygen',file_list[1]) ~ "IPSL Oxygen",
+      grepl('ipsl_bt',file_list[1]) ~ "IPSL Temperature",
+      grepl('gfdl_oxygen',file_list[1]) ~ "GFDL Oxygen",
+      grepl('gfdl_bt',file_list[1]) ~ "GFDL Temperature",
+      grepl('had_oxygen',file_list[1]) ~ "HAD Oxygen",
+      grepl('had_bt',file_list[1]) ~ "HAD Temperature",
+    )
+    lab <- ifelse(grepl('bt',file_list[1]),"Bottom Temperature","Bottom Oxygen")
+    # make plot
+    p <- sdf %>% 
+      ggplot(aes(year,m,col=fct_reorder(latbin,bin)))+
+      geom_line()+
+      scale_color_locuszoom()+
+      labs(x='Year',y=paste("Mean",lab),col="Latitude",title=pt)+
+      theme_minimal()
+    return(p)
+  } else return(sdf)
+}
+```
+
+Try it out
+
+```{r}
+purrr::map(list(gfdl_bt_fl,had_bt_fl,ipsl_bt_fl,gfdl_o_fl,had_o_fl,ipsl_o_fl), plot_ts)
+```
+
