@@ -1,5 +1,5 @@
 ---
-title: "Organizing projected ROMS outputs for SDM fitting"
+title: "Organizing projected ROMS outputs for SDMs"
 author: "Jameal Samhouri"
 date: "5/24/2021"
 output: html_document
