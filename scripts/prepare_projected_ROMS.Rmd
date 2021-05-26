@@ -253,16 +253,6 @@ for (k in 1:length(variables)){
 
 ```
 
-## Make a dataframe out of the annual rasters
-
-Make an .rds we can  refer to that includes the lat, long for each cell in the ROMS domain along with the values for each covariate and each downscaled GCM. 
-
-It may make more sense to do this in the for loops above.
-
-```{r}
-
-```
-
 ## Trawl survey locations
 
 This chunk is not yet used but putting it here for the future joins we may wish to do.
