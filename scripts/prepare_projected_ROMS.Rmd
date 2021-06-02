@@ -1,5 +1,5 @@
 ---
-title: "Organizing projected ROMS outputs for SDM fitting"
+title: "Organizing projected ROMS outputs for SDMs"
 author: "Jameal Samhouri"
 date: "5/24/2021"
 output: html_document
@@ -250,16 +250,6 @@ for (k in 1:length(variables)){
 #     bt_lower = quantile(bt, probs=(0.025))
 #   )
 # glimpse(t_gfdl_slice_summary)
-
-```
-
-## Make a dataframe out of the annual rasters
-
-Make an .rds we can  refer to that includes the lat, long for each cell in the ROMS domain along with the values for each covariate and each downscaled GCM. 
-
-It may make more sense to do this in the for loops above.
-
-```{r}
 
 ```
 

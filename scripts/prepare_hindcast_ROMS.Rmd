@@ -1,5 +1,5 @@
 ---
-title: "Organizing ROMS data for SDM fitting"
+title: "Organizing ROMS hindcast data for SDM fitting"
 author: "Owen Liu"
 date: "5/11/2021"
 output: html_document
