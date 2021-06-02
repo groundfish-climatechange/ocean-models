@@ -1,0 +1,158 @@
+---
+title: "TidyNC Projected ROMS"
+author: "Owen Liu"
+date: "6/2/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(tidync)
+library(here)
+library(lubridate)
+library(here)
+# library(ncdf4)
+# library(raster)
+knitr::opts_chunk$set(echo = TRUE)
+ options(dplyr.summarise.inform = FALSE)
+```
+
+# Purpose
+
+Try a different way of extracting and organizing projected ROMS data for use in species distribution models. The main idea is to test whether using `tidync` can make the process smoother and faster (i.e., fewer translation steps between ncdf, raster, and tabular data formats)
+
+# Import Data
+
+We'll just test with one of the projection files.
+
+```{r}
+bt_gfdl_fl <- here('data','bt_daily_roms_gfdl_1980_2100.nc')
+bt_gfdl <- tidync(bt_gfdl_fl)
+print(bt_gfdl)
+```
+
+```{r}
+# look at the grids
+hyper_grids(bt_gfdl)
+hyper_dims(bt_gfdl)
+hyper_vars(bt_gfdl)
+```
+
+
+The netCDFs have longitude, latitude, and time (year, month, day, and `roms_time`, which is seconds since 1900-01-01). Goal- pull each trawl survey season (May-October) and average at each grid cell.
+
+# Create a Time Reference
+
+Time is encoded a bit weirdly in the ncdf, so we need to figure out a time "index" to assist with referencing between year/month/day and the actual time variable.
+
+```{r}
+# time index
+time_reference <- bt_gfdl %>% activate("D2") %>% 
+  hyper_tibble() %>% 
+  # add an index
+  mutate(idx=row_number())
+glimpse(time_reference)
+```
+
+We'll use this time reference to help in filtering the dataset to extract each year's data. Here's an example:
+
+```{r}
+# find the correct "time index" for 1980, all dates between May and October inclusive
+x<- time_reference %>% filter(year==1980,month>=5,month<=10) %>% 
+  # extract the appropriate time index
+  pluck('idx')
+
+# try taking a slice of data for this time index
+y <- bt_gfdl %>% hyper_filter(time=index%in%x) %>% hyper_tibble()
+# seems to work
+
+# now summarize means by grid cell
+z <- y %>% 
+  group_by(longitude,latitude) %>% 
+  summarise(mean_bt=mean(bt)) %>% 
+  mutate(year=1980) %>% 
+  ungroup()
+# seems to work
+```
+
+# Annual Summary Function
+
+Okay this general workflow seems to work. Let's write a function and make a loop to apply this to all years in the data.
+
+```{r}
+pull_season_df <- function(ncdf_file,yr){
+  # load the file reference
+  nc <- tidync(ncdf_file)
+  
+  # get the input variable name
+  v <- hyper_vars(nc) %>% pluck("name")
+  # output variable name
+  out <- paste0("mean_",v)
+  
+  # find the appropriate time reference (may to october of the given year)
+  tm <- time_reference %>% 
+    filter(year==yr,month>=5,month<=10) %>% 
+    pluck('idx')
+  
+  # extract and summarize the data across the season for each lat/lon
+  dat <- nc %>% 
+    hyper_filter(time=index%in%x) %>%
+    hyper_tibble() %>% 
+    group_by(longitude,latitude) %>% 
+    summarise(!!out:=mean(!!sym(v))) %>% 
+    mutate(year=yr) %>% 
+    ungroup()
+  
+  print(paste("Extracted",out,"for",yr))
+  # return the summarized dataframe
+  return(dat)
+}
+```
+
+Test the function for an example year
+
+```{r}
+bt_gfdl_2035 <- pull_season_df(bt_gfdl_fl,yr=2035)
+glimpse(bt_gfdl_2035)
+```
+
+And for oxygen
+
+```{r}
+oxygen_gfdl_2035 <- pull_season_df(here('data','oxygen_bottom_daily_roms_gfdl_1980_2100.nc'),yr=2035)
+```
+
+
+# Apply Summary Function
+
+Now, we can apply the above function to all of the data.
+
+```{r}
+yrs_to_extract <- 1980:2100
+```
+
+```{r,message=F}
+# for GFDL bottom temperature
+bt_gfdl_summ <- purrr::map_df(yrs_to_extract,pull_season_df,ncdf_file=bt_gfdl_fl)
+
+# for IPSL bottom temperature
+bt_ipsl_fl <- here('data','bt_daily_roms_ipsl_1980_2100.nc')
+bt_ipsl_summ <- purrr::map_df(yrs_to_extract,pull_season_df,ncdf_file=bt_ipsl_fl)
+
+# for Hadley bottom temperature
+bt_had_fl <- here('data','bt_daily_roms_had_1980_2100.nc')
+bt_had_summ <- purrr::map_df(yrs_to_extract,pull_season_df,ncdf_file=bt_had_fl)
+
+# for GFDL bottom temperature
+oxygen_bottom_gfdl_fl <- here('data','oxygen_bottom_daily_roms_gfdl_1980_2100.nc')
+oxygen_bottom_gfdl_summ <- purrr::map_df(yrs_to_extract,pull_season_df,ncdf_file=oxygen_bottom_gfdl_fl)
+
+# for IPSL bottom temperature
+oxygen_bottom_ipsl_fl <- here('data','oxygen_bottom_daily_roms_ipsl_1980_2100.nc')
+oxygen_bottom_ipsl_summ <- purrr::map_df(yrs_to_extract,pull_season_df,ncdf_file=oxygen_bottom_ipsl_fl)
+
+# for Hadley bottom temperature
+oxygen_bottom_had_fl <- here('data','oxygen_bottom_daily_roms_had_1980_2100.nc')
+oxygen_bottom_had_summ <- purrr::map_df(yrs_to_extract,pull_season_df,ncdf_file=oxygen_bottom_had_fl)
+```
+
