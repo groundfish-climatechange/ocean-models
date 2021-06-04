@@ -17,6 +17,7 @@ library(here)
 library(raster)
 library(tabularaster)
 library(viridis)
+library(ggsci)
 knitr::opts_chunk$set(echo = TRUE)
 options(dplyr.summarise.inform=F)
 ```
@@ -83,7 +84,6 @@ purrr::map(list(gfdl_bt_fl,had_bt_fl,ipsl_bt_fl,gfdl_o_fl,had_o_fl,ipsl_o_fl), m
 First, a latitude-binned time series of mean values
 
 ```{r}
-library(ggsci)
 plot_ts <- function(file_list,return_plot=T){
   # import files into a raster stack
   s <- stack(file_list)
@@ -133,4 +133,3 @@ Try it out
 ```{r}
 purrr::map(list(gfdl_bt_fl,had_bt_fl,ipsl_bt_fl,gfdl_o_fl,had_o_fl,ipsl_o_fl), plot_ts)
 ```
-
