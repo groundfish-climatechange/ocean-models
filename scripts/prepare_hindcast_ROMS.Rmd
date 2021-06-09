@@ -46,6 +46,7 @@ glimpse(hindcast)
 # and the trawl stations
 trawlID <- hindcast_file %>% activate("D0") %>% hyper_tibble()
 glimpse(trawlID)
+# write_rds(trawlID,here::here('data','trawlID.rds'))
 
 # join trawl info to hindcast data
 hindcast <- hindcast %>% left_join(trawlID, by="station")
@@ -59,6 +60,7 @@ We want to derive, from the trawl-matched ROMS outputs, some summarized environm
 Since time is an integer day, it make it easier for us to calculate lags. For this function, we assume the dataframe has the exact variable names as the `hindcast` dataframe above.
 
 For calculating lagged means, we use the `zoo::rollapply` function.
+
 ```{r}
 # using `zoo::rollapply`
 append_lag <- function(df,variable=temp_roms,lagdays=30){
@@ -114,5 +116,9 @@ samp %>%
   labs(x="Concurrent Temperature",y="30 Day Lagged Mean Temperature")
 ```
 
+# Save
 
+```{r}
+write_rds(hindcast_lagged_temp_oxy,here::here('data','joined trawl roms','joined_30d_lagged_t_o.rds'))
+```
 
