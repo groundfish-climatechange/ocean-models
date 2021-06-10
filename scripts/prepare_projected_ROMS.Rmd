@@ -19,7 +19,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Purpose
 
-The purpose of this script is to import and organize ROMS environmental outputs, and join it to west coast trawl survey data through customizable scripts for choosing species and derived environmental variables of interest (e.g., 1 month-lagged bottom temperature).
+The purpose of this script is to import and organize ROMS environmental outputs from downscaled projections, and convert them into rasters.
 
 As of May 11, 2021, there are 6 ROMS projection files, reporting either bottom temperature or bottom oxygen associated with either the Hadley, GFDL, or IPSL GCM projections.
 
@@ -200,7 +200,7 @@ proc.time()-t
 
 We want to derive, from the ROMS projection outputs, some summarized environmental variables. We write some loops that can calculate, for each grid cell in the ROMS domain, a mean/97.5%/2.5% value for an environmental variable, at that location, between the files_survey_months_pattern, where files_survey_months_pattern can be anything (but months in the range May-October make the most sense because that is when the trawl survey occurs). 
 
-Since time is just a year right now, we take the mean for each year. For this function, we assume the dataframe has the exact variable names as the `t_gfdl_slice` dataframe above.
+Since time is just a year right now, we take the mean for each year. 
 
 ## Make annual rasters
 

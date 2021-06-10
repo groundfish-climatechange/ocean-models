@@ -26,7 +26,7 @@ Try a different way of extracting and organizing projected ROMS data for use in 
 We'll just test with one of the projection files.
 
 ```{r}
-bt_gfdl_fl <- here('data','bt_daily_roms_gfdl_1980_2100.nc')
+bt_gfdl_fl <- here('data','Projection NCDFs','bt_daily_roms_gfdl_1980_2100.nc')
 bt_gfdl <- tidync(bt_gfdl_fl)
 print(bt_gfdl)
 ```
@@ -119,7 +119,8 @@ glimpse(bt_gfdl_2035)
 And for oxygen
 
 ```{r}
-oxygen_gfdl_2035 <- pull_season_df(here('data','oxygen_bottom_daily_roms_gfdl_1980_2100.nc'),yr=2035)
+oxygen_gfdl_2035 <- pull_season_df(here('data','Projection NCDFs','oxygen_bottom_daily_roms_gfdl_1980_2100.nc'),yr=2035)
+glimpse(oxygen_gfdl_2035)
 ```
 
 
@@ -136,23 +137,73 @@ yrs_to_extract <- 1980:2100
 bt_gfdl_summ <- purrr::map_df(yrs_to_extract,pull_season_df,ncdf_file=bt_gfdl_fl)
 
 # for IPSL bottom temperature
-bt_ipsl_fl <- here('data','bt_daily_roms_ipsl_1980_2100.nc')
+bt_ipsl_fl <- here('data','Projection NCDFs','bt_daily_roms_ipsl_1980_2100.nc')
 bt_ipsl_summ <- purrr::map_df(yrs_to_extract,pull_season_df,ncdf_file=bt_ipsl_fl)
 
 # for Hadley bottom temperature
-bt_had_fl <- here('data','bt_daily_roms_had_1980_2100.nc')
+bt_had_fl <- here('data','Projection NCDFs','bt_daily_roms_had_1980_2100.nc')
 bt_had_summ <- purrr::map_df(yrs_to_extract,pull_season_df,ncdf_file=bt_had_fl)
 
 # for GFDL bottom temperature
-oxygen_bottom_gfdl_fl <- here('data','oxygen_bottom_daily_roms_gfdl_1980_2100.nc')
+oxygen_bottom_gfdl_fl <- here('data','Projection NCDFs','oxygen_bottom_daily_roms_gfdl_1980_2100.nc')
 oxygen_bottom_gfdl_summ <- purrr::map_df(yrs_to_extract,pull_season_df,ncdf_file=oxygen_bottom_gfdl_fl)
 
 # for IPSL bottom temperature
-oxygen_bottom_ipsl_fl <- here('data','oxygen_bottom_daily_roms_ipsl_1980_2100.nc')
+oxygen_bottom_ipsl_fl <- here('data','Projection NCDFs','oxygen_bottom_daily_roms_ipsl_1980_2100.nc')
 oxygen_bottom_ipsl_summ <- purrr::map_df(yrs_to_extract,pull_season_df,ncdf_file=oxygen_bottom_ipsl_fl)
 
 # for Hadley bottom temperature
-oxygen_bottom_had_fl <- here('data','oxygen_bottom_daily_roms_had_1980_2100.nc')
+oxygen_bottom_had_fl <- here('data','Projection NCDFs','oxygen_bottom_daily_roms_had_1980_2100.nc')
 oxygen_bottom_had_summ <- purrr::map_df(yrs_to_extract,pull_season_df,ncdf_file=oxygen_bottom_had_fl)
 ```
 
+# Join summary from individual models into a single data frame
+
+```{r}
+
+df_summ <- bt_gfdl_summ %>%
+  rename(mean_bt_gfdl = mean_bt) %>%
+  left_join(
+    bt_ipsl_summ %>% rename( mean_bt_ipsl = mean_bt)
+  ) %>%
+  left_join(
+    bt_had_summ %>% rename( mean_bt_hadl = mean_bt)
+  ) %>%
+  left_join(
+    oxygen_bottom_gfdl_summ %>% rename( mean_oxy_bottom_gfdl = mean_oxy_bottom)
+  ) %>%
+  left_join(
+    oxygen_bottom_ipsl_summ %>% rename( mean_oxy_bottom_ipsl = mean_oxy_bottom)
+  ) %>%
+  left_join(
+    oxygen_bottom_had_summ %>% rename( mean_oxy_bottom_hadl = mean_oxy_bottom)
+  ) 
+glimpse(df_summ)
+
+```
+
+# Replace index values for lat and long with midpoint coordinates
+
+```{r}
+
+ll_ref <- bt_gfdl %>% activate("D0,D1") %>% hyper_tibble()
+
+df_summ <- df_summ %>%
+  left_join(ll_ref) %>%
+  select(
+    year, lat, lon, everything()
+  ) %>%
+  select(
+    -longitude, -latitude
+  )
+glimpse(df_summ)
+
+```
+
+# Write out the summary data frame
+
+```{r}
+
+write_rds(df_summ,here('data','mean_bt_ox_allmodels_1980_2100.rds'))
+
+```
