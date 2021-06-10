@@ -53,6 +53,15 @@ hindcast <- hindcast %>% left_join(trawlID, by="station")
 glimpse(hindcast)
 ```
 
+```{r}
+# ROMS time reference ("roms_time" to real dates)
+roms_time_ref <- hindcast_file %>% activate("D1") %>% hyper_tibble() %>% 
+  mutate(date=as_datetime(roms_time,origin="1900-01-01")) %>%
+  mutate(date=as_date(date))
+write_rds(roms_time_ref,here('data','roms_time_date_reference.rds'))
+```
+
+
 # Derive Environmental Variables - Hindcast
 
 We want to derive, from the trawl-matched ROMS outputs, some summarized environmental variables. We start by writing a function that can calculate, for each trawl location and time, a mean value for an environmental variable, at that location, over the past x days, where x can be anything. For the edge case at the beginning of the timeseries, to avoid losing data we will use the 'mean of the past x days or since the beginning of the timeseries.
