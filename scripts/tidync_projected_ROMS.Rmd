@@ -80,6 +80,10 @@ z <- y %>%
 Okay this general workflow seems to work. Let's write a function and make a loop to apply this to all years in the data.
 
 ```{r}
+
+ncdf_file <- here('data','Projection NCDFs','oxygen_bottom_daily_roms_gfdl_1980_2100.nc')
+yr <- 2000
+
 pull_season_df <- function(ncdf_file,yr){
   # load the file reference
   nc <- tidync(ncdf_file)
@@ -96,7 +100,7 @@ pull_season_df <- function(ncdf_file,yr){
   
   # extract and summarize the data across the season for each lat/lon
   dat <- nc %>% 
-    hyper_filter(time=index%in%x) %>%
+    hyper_filter(time=index%in%tm) %>%
     hyper_tibble() %>% 
     group_by(longitude,latitude) %>% 
     summarise(!!out:=mean(!!sym(v))) %>% 

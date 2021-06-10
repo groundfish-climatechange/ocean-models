@@ -201,8 +201,19 @@ plot_ts_direct <- function(df_name, var_name, return_plot=T){
 Try it out
 
 ```{r}
-purrr::map(list(df_summ), plot_ts_direct) # i need to fix this line so it reads all arguments of the plot_ts_direct function
+# i want to apply purrr::map  across a list of var_name using the function plot_ts_direct() with other arguments set to constant
+purrr::map(c("mean_bt_gfdl", "mean_bt_ipsl", "mean_bt_hadl", "mean_oxy_bottom_gfdl","oxy_bottom_ipsl","mean_oxy_bottom_hadl"), plot_ts_direct, df_name = df_summ, return_plot=T) 
+```
+
+And save a tibble
+
+```{r}
+
+latbins_summ <- purrr::map_df(c("mean_bt_gfdl", "mean_bt_ipsl", "mean_bt_hadl", "mean_oxy_bottom_gfdl","oxy_bottom_ipsl","mean_oxy_bottom_hadl"), plot_ts_direct, df_name = df_summ, return_plot=F)
+
 ```
 
 # Hovmoller plots
+
+Plot latitude and year with the variable represented by colors
 
