@@ -1,0 +1,102 @@
+---
+title: "Make Data Frame with Annual Environmental Data"
+author: "Owen Liu, Jameal Samhouri"
+date: "5/25/2021"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(tidync)
+library(here)
+library(zoo)
+library(lubridate)
+library(here)
+# library(ncdf4)
+library(raster)
+library(tabularaster)
+library(viridis)
+library(ggsci)
+knitr::opts_chunk$set(echo = TRUE)
+options(dplyr.summarise.inform=F)
+```
+
+# Purpose
+
+Take the rasterized annual outputs from projected ROMS and make a data frame from them. The environmental data have already been extracted and summarized for temperature and oxygen, such that the value for each cell has either mean bottom temperature or mean bottom oxygen, across the season from May to October(??).
+
+There are 6 projection types total, corresponding to three GCMs (IPSL, Hadley, and GFDL) and two environmental variables (temperature and oxygen)
+
+
+# Import Data
+
+Import the raster data into stacks
+
+```{r}
+# organize the file names we want to import
+x <- list.files(here('data','Projection Rasters','Rasters_2d_Survey_Months'),full.names=T,pattern = ".grd")
+gfdl_bt_fl <- x[grepl('gfdl_bt',x)]
+gfdl_ox_fl <- x[grepl('gfdl_oxygen',x)]
+had_bt_fl <- x[grepl('had_bt',x)]
+had_ox_fl <- x[grepl('had_oxygen',x)]
+ipsl_bt_fl <- x[grepl('ipsl_bt',x)]
+ipsl_ox_fl <- x[grepl('ipsl_oxygen',x)]
+```
+
+
+## Make a Data Frame with a Time Series of Environmental Variables
+
+First, make a function for cell-specific time series for each model-covariate combination
+
+```{r}
+# file_list <- gfdl_bt_fl
+# yrs <- 1980:2100
+# envvar <- "gfdl_bt"
+make_ts <- function(file_list){
+  # import files into a raster stack
+  s <- stack(file_list) #file_list[1:5]
+  yrs <- 1980:2100
+  envvar <- case_when(
+      grepl('ipsl_oxygen',file_list[1]) ~ "ipsl_ox",
+      grepl('ipsl_bt',file_list[1]) ~ "ipsl_bt",
+      grepl('gfdl_oxygen',file_list[1]) ~ "gfdl_ox",
+      grepl('gfdl_bt',file_list[1]) ~ "gfdl_bt",
+      grepl('had_oxygen',file_list[1]) ~ "hadl_ox",
+      grepl('had_bt',file_list[1]) ~ "hadl_bt",
+    )
+  # convert to tibble
+  sdf <- s %>% as_tibble(xy=T) %>% 
+    # create a year column then remove the old index one
+    mutate(
+      year = yrs[dimindex]
+    ) %>%
+    dplyr::select(
+      -dimindex
+    ) %>%
+    # rename remaining columns
+    rename(
+      lat = y,
+      long = x,
+      !!envvar:=cellvalue
+    ) %>%
+    # organize the tibble
+    dplyr::select(
+      year, lat, long, !!envvar
+    )
+  # need to add a line to save the df as an rds
+  return(sdf)
+}
+
+make_ts(file_list = gfdl_bt_fl)
+
+```
+
+Try it out
+
+```{r}
+purrr::map(
+  list(gfdl_bt_fl,had_bt_fl,ipsl_bt_fl,gfdl_ox_fl,had_ox_fl,ipsl_ox_fl), 
+  make_ts
+  )
+```
