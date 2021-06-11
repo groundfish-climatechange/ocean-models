@@ -36,13 +36,13 @@ Import the raster data into stacks
 
 ```{r}
 # organize the file names we want to import
-x <- list.files(here('data','Projection Rasters','Rasters_2d_Survey_Months'),full.names=T,pattern = ".grd")
-gfdl_bt_fl <- x[grepl('gfdl_bt',x)]
-gfdl_o_fl <- x[grepl('gfdl_oxygen',x)]
-had_bt_fl <- x[grepl('had_bt',x)]
-had_o_fl <- x[grepl('had_oxygen',x)]
-ipsl_bt_fl <- x[grepl('ipsl_bt',x)]
-ipsl_o_fl <- x[grepl('ipsl_oxygen',x)]
+# x <- list.files(here('data','Projection Rasters','Rasters_2d_Survey_Months'),full.names=T,pattern = ".grd")
+# gfdl_bt_fl <- x[grepl('gfdl_bt',x)]
+# gfdl_o_fl <- x[grepl('gfdl_oxygen',x)]
+# had_bt_fl <- x[grepl('had_bt',x)]
+# had_o_fl <- x[grepl('had_oxygen',x)]
+# ipsl_bt_fl <- x[grepl('ipsl_bt',x)]
+# ipsl_o_fl <- x[grepl('ipsl_oxygen',x)]
 ```
 
 Import the rds file containing the direct extraction and summary values from the ncdf files.
@@ -72,28 +72,28 @@ We'll try a few different visualizations, writing functions for each that:
 ## Mean Conditions
 
 ```{r}
-mean_raster <- function(file_list){
-  # import files into a raster stack
-  s <- stack(file_list)
-  # take the mean
-  m <- mean(s)
-  # label for plot
-  pt <- case_when(
-    grepl('ipsl_oxygen',file_list[1]) ~ "IPSL Oxygen",
-    grepl('ipsl_bt',file_list[1]) ~ "IPSL Temperature",
-    grepl('gfdl_oxygen',file_list[1]) ~ "GFDL Oxygen",
-    grepl('gfdl_bt',file_list[1]) ~ "GFDL Temperature",
-    grepl('had_oxygen',file_list[1]) ~ "HAD Oxygen",
-    grepl('had_bt',file_list[1]) ~ "HAD Temperature",
-  )
-  # plot
-  plot(m,main=pt,col=cividis(256))
-}
+# mean_raster <- function(file_list){
+#   # import files into a raster stack
+#   s <- stack(file_list)
+#   # take the mean
+#   m <- mean(s)
+#   # label for plot
+#   pt <- case_when(
+#     grepl('ipsl_oxygen',file_list[1]) ~ "IPSL Oxygen",
+#     grepl('ipsl_bt',file_list[1]) ~ "IPSL Temperature",
+#     grepl('gfdl_oxygen',file_list[1]) ~ "GFDL Oxygen",
+#     grepl('gfdl_bt',file_list[1]) ~ "GFDL Temperature",
+#     grepl('had_oxygen',file_list[1]) ~ "HAD Oxygen",
+#     grepl('had_bt',file_list[1]) ~ "HAD Temperature",
+#   )
+#   # plot
+#   plot(m,main=pt,col=cividis(256))
+# }
 ```
 Try it out
 
 ```{r}
-purrr::map(list(gfdl_bt_fl,had_bt_fl,ipsl_bt_fl,gfdl_o_fl,had_o_fl,ipsl_o_fl), mean_raster)
+# purrr::map(list(gfdl_bt_fl,had_bt_fl,ipsl_bt_fl,gfdl_o_fl,had_o_fl,ipsl_o_fl), mean_raster)
 ```
 
 ## Time Series
@@ -101,54 +101,54 @@ purrr::map(list(gfdl_bt_fl,had_bt_fl,ipsl_bt_fl,gfdl_o_fl,had_o_fl,ipsl_o_fl), m
 First, a latitude-binned time series of mean values from the raster stack
 
 ```{r}
-plot_ts <- function(file_list,return_plot=T){
-  # import files into a raster stack
-  s <- stack(file_list)
-  yrs <- 1980:2100
-  # convert to tibble
-  sdf <- s %>% as_tibble(xy=T) %>% 
-    #split into bins
-    mutate(bin=findInterval(y,vec=seq(30,50,by=5)),
-           year=yrs[dimindex]) %>% 
-    # summarize by latitude bin
-    group_by(year,bin) %>% 
-    summarise(m=mean(cellvalue,na.rm=T)) %>% 
-    ungroup()
-  if(return_plot){
-    # create labels for latitude bins
-    sdf <- sdf %>% 
-      mutate(latbin=case_when(
-        bin==1 ~ "30-35",
-        bin==2 ~ "35-40",
-        bin==3 ~ "40-45",
-        bin==4 ~ ">45"
-      ))
-    # label for plot
-    pt <- case_when(
-      grepl('ipsl_oxygen',file_list[1]) ~ "IPSL Oxygen",
-      grepl('ipsl_bt',file_list[1]) ~ "IPSL Temperature",
-      grepl('gfdl_oxygen',file_list[1]) ~ "GFDL Oxygen",
-      grepl('gfdl_bt',file_list[1]) ~ "GFDL Temperature",
-      grepl('had_oxygen',file_list[1]) ~ "HAD Oxygen",
-      grepl('had_bt',file_list[1]) ~ "HAD Temperature",
-    )
-    lab <- ifelse(grepl('bt',file_list[1]),"Bottom Temperature","Bottom Oxygen")
-    # make plot
-    p <- sdf %>% 
-      ggplot(aes(year,m,col=fct_reorder(latbin,bin)))+
-      geom_line()+
-      scale_color_locuszoom()+
-      labs(x='Year',y=paste("Mean",lab),col="Latitude",title=pt)+
-      theme_minimal()
-    return(p)
-  } else return(sdf)
-}
+# plot_ts <- function(file_list,return_plot=T){
+#   # import files into a raster stack
+#   s <- stack(file_list)
+#   yrs <- 1980:2100
+#   # convert to tibble
+#   sdf <- s %>% as_tibble(xy=T) %>% 
+#     #split into bins
+#     mutate(bin=findInterval(y,vec=seq(30,50,by=5)),
+#            year=yrs[dimindex]) %>% 
+#     # summarize by latitude bin
+#     group_by(year,bin) %>% 
+#     summarise(m=mean(cellvalue,na.rm=T)) %>% 
+#     ungroup()
+#   if(return_plot){
+#     # create labels for latitude bins
+#     sdf <- sdf %>% 
+#       mutate(latbin=case_when(
+#         bin==1 ~ "30-35",
+#         bin==2 ~ "35-40",
+#         bin==3 ~ "40-45",
+#         bin==4 ~ ">45"
+#       ))
+#     # label for plot
+#     pt <- case_when(
+#       grepl('ipsl_oxygen',file_list[1]) ~ "IPSL Oxygen",
+#       grepl('ipsl_bt',file_list[1]) ~ "IPSL Temperature",
+#       grepl('gfdl_oxygen',file_list[1]) ~ "GFDL Oxygen",
+#       grepl('gfdl_bt',file_list[1]) ~ "GFDL Temperature",
+#       grepl('had_oxygen',file_list[1]) ~ "HAD Oxygen",
+#       grepl('had_bt',file_list[1]) ~ "HAD Temperature",
+#     )
+#     lab <- ifelse(grepl('bt',file_list[1]),"Bottom Temperature","Bottom Oxygen")
+#     # make plot
+#     p <- sdf %>% 
+#       ggplot(aes(year,m,col=fct_reorder(latbin,bin)))+
+#       geom_line()+
+#       scale_color_locuszoom()+
+#       labs(x='Year',y=paste("Mean",lab),col="Latitude",title=pt)+
+#       theme_minimal()
+#     return(p)
+#   } else return(sdf)
+# }
 ```
 
 Try it out
 
 ```{r}
-purrr::map(list(gfdl_bt_fl,had_bt_fl,ipsl_bt_fl,gfdl_o_fl,had_o_fl,ipsl_o_fl), plot_ts)
+# purrr::map(list(gfdl_bt_fl,had_bt_fl,ipsl_bt_fl,gfdl_o_fl,had_o_fl,ipsl_o_fl), plot_ts)
 ```
 
 Second, a latitude-binned time series of mean values from the direct extraction
@@ -222,11 +222,10 @@ Note this output is a list of 6 tibbles, one for each model-variable combination
 
 # Make some maps based on the directly extracted summary data
 
-Start by looking at 1980-2010 vs 2070-2100
-Then make a difference map
+Start by looking at 1980-2010 vs 2070-2100. Then make a difference map
 ```{r}
-df_name <- df_summ
-var_name <- 'mean_bt_gfdl'
+# df_name <- df_summ
+# var_name <- 'mean_bt_gfdl'
 
 plot_map_direct <- function(df_name, var_name, return_plot=T){
   
@@ -235,65 +234,114 @@ plot_map_direct <- function(df_name, var_name, return_plot=T){
     group_by(lat,lon) %>% 
     summarise(
       m = mean(.data[[var_name]],na.rm=T)
-      ) 
+      ) %>%
+    ungroup()
     
   df_end <- df_name %>% 
     filter(year>=2070) %>% 
     group_by(lat,lon) %>% 
     summarise(
       m = mean(.data[[var_name]],na.rm=T)
-      ) 
+      ) %>%
+    ungroup()
   
   df_delta <- df_begin %>%
     left_join(df_end, by = c('lat','lon')) %>%
     mutate(
       delta = m.y-m.x
-    )
+    ) %>%
+    ungroup()
   
   if(return_plot){
     # label for plot
     pt <- case_when(
-      grepl('oxy_bottom_ipsl',var_name) ~ "IPSL Oxygen",
-      grepl('mean_bt_ipsl',var_name) ~ "IPSL Temperature",
-      grepl('mean_oxy_bottom_gfdl',var_name) ~ "GFDL Oxygen",
-      grepl('mean_bt_gfdl',var_name) ~ "GFDL Temperature",
-      grepl('mean_oxy_bottom_hadl',var_name) ~ "HAD Oxygen",
-      grepl('mean_bt_hadl',var_name) ~ "HAD Temperature",
+      grepl('oxy_bottom_ipsl',var_name) ~ "IPSL Bottom Oxygen",
+      grepl('mean_bt_ipsl',var_name) ~ "IPSL Bottom Temperature",
+      grepl('mean_oxy_bottom_gfdl',var_name) ~ "GFDL Bottom Oxygen",
+      grepl('mean_bt_gfdl',var_name) ~ "GFDL Bottom Temperature",
+      grepl('mean_oxy_bottom_hadl',var_name) ~ "HAD Bottom Oxygen",
+      grepl('mean_bt_hadl',var_name) ~ "HAD Bottom Temperature",
     )
-    lab <- ifelse(grepl('bt',var_name),"Bottom Temperature","Bottom Oxygen")
+    lab <- ifelse(grepl('bt',var_name),"Bottom\nTemperature","Bottom\nOxygen")
+    
     # make plots
     p_begin <- df_begin %>% 
       ggplot(aes(x=lon, y=lat)) + 
-      geom_tile(aes(fill=m.y)) +
-      theme_classic() + labs(y="", x="", title = pt) + 
+      geom_tile(aes(fill=m)) +
+      theme_classic() + labs(y="", x="", title = pt, subtitle = "1980-2010") + 
       theme(legend.position="right",legend.title = element_blank()) +
       theme( panel.border = element_rect(colour = "black", fill=NA, size=1)) + #makes a box
-      scale_fill_gradientn(colours = cmocean("ice")(256), name=lab) +
+      scale_fill_gradientn(colours = cmocean("ice")(256), 
+                           limits = c(min(df_delta$m.x), max(df_delta$m.y)),
+                           name=lab) + # lab is not working
       annotation_map(map_data("world"), colour = "black", fill="grey50") +
       coord_quickmap(xlim=c(-126,-115.8),ylim=c(30,48)) +  #Sets aspect ratio
       scale_x_continuous(expand = c(0, 0)) + scale_y_continuous(expand = c(0, 0))
-    return(p_begin)
-  } else return(sdf)
+    
+    p_end <- df_end %>% 
+      ggplot(aes(x=lon, y=lat)) + 
+      geom_tile(aes(fill=m)) +
+      theme_classic() + labs(y="", x="", title = pt, subtitle = "2070-2100") + 
+      theme(legend.position="right",legend.title = element_blank()) +
+      theme( panel.border = element_rect(colour = "black", fill=NA, size=1)) + #makes a box
+      scale_fill_gradientn(colours = cmocean("ice")(256), 
+                           limits = c(min(df_delta$m.x), max(df_delta$m.y)),
+                           name=lab) + # lab is not working
+      annotation_map(map_data("world"), colour = "black", fill="grey50") +
+      coord_quickmap(xlim=c(-126,-115.8),ylim=c(30,48)) +  #Sets aspect ratio
+      scale_x_continuous(expand = c(0, 0)) + scale_y_continuous(expand = c(0, 0))
+    
+    p_delta <- df_delta %>% 
+      ggplot(aes(x=lon, y=lat)) + 
+      geom_tile(aes(fill=delta)) +
+      theme_classic() + labs(y="", x="", title = pt, subtitle = "Difference between 2070-2100 and 1980-2010") + 
+      theme(legend.position="right",legend.title = element_blank()) +
+      theme( panel.border = element_rect(colour = "black", fill=NA, size=1)) + #makes a box
+      scale_fill_gradientn(colours = colorRampPalette(colors = c("#3498db", "white", "#e74c3c"))(256),
+                           limits = c(min(df_delta$delta), max(df_delta$delta)), 
+                           name=lab) + # lab is not working
+      annotation_map(map_data("world"), colour = "black", fill="grey50") +
+      coord_quickmap(xlim=c(-126,-115.8),ylim=c(30,48)) +  #Sets aspect ratio
+      scale_x_continuous(expand = c(0, 0)) + scale_y_continuous(expand = c(0, 0))
+    
+    return(list(p_begin, p_end, p_delta))
+  } else return(list(df_begin, df_end, df_delta))
 }
 
-mean_bt_gfdl_end <- df_summ %>% filter(year>=2070) %>% group_by(lat,lon) %>% summarise(mean_bt_gfdl = mean(mean_bt_gfdl)) #%>%
+# mean_bt_gfdl_end <- df_summ %>% filter(year>=2070) %>% group_by(lat,lon) %>% summarise(mean_bt_gfdl = mean(mean_bt_gfdl)) #%>%
   #rename(x=lat, y=lon) #%>% pivot_wider(names_from=lon,values_from = mean_bt_gfdl)
 
-
-
-map1 <- ggplot(data=mean_bt_gfdl_end, aes(x=lon, y=lat))+
-  geom_tile(aes(fill=mean_bt_gfdl))+
-  theme_classic() +  labs(y="", x="", title = "mean_bt_gfdl 2070-2100") +   theme(legend.position="right",legend.title = element_blank())+
-  theme( panel.border = element_rect(colour = "black", fill=NA, size=1)) + #makes a box
-  scale_fill_gradientn(colours = cmocean("ice")(256), name="Bottom Temperature") +
-  annotation_map(map_data("world"), colour = "black", fill="grey50")+
-  coord_quickmap(xlim=c(-126,-115.8),ylim=c(30,48)) +  #Sets aspect ratio
-  scale_x_continuous(expand = c(0, 0)) +  scale_y_continuous(expand = c(0, 0))
-map1
+# map1 <- ggplot(data=mean_bt_gfdl_end, aes(x=lon, y=lat))+
+#   geom_tile(aes(fill=mean_bt_gfdl))+
+#   theme_classic() +  labs(y="", x="", title = "mean_bt_gfdl 2070-2100") +   theme(legend.position="right",legend.title = element_blank())+
+#   theme( panel.border = element_rect(colour = "black", fill=NA, size=1)) + #makes a box
+#   scale_fill_gradientn(colours = cmocean("ice")(256), name="Bottom Temperature") +
+#   annotation_map(map_data("world"), colour = "black", fill="grey50")+
+#   coord_quickmap(xlim=c(-126,-115.8),ylim=c(30,48)) +  #Sets aspect ratio
+#   scale_x_continuous(expand = c(0, 0)) +  scale_y_continuous(expand = c(0, 0))
+# map1
 
 
 ```
 
+Try it out
+
+```{r}
+# i want to apply purrr::map  across a list of var_name using the function plot_ts_direct() with other arguments set to constant
+model_var <- c("mean_bt_gfdl", "mean_bt_ipsl", "mean_bt_hadl", "mean_oxy_bottom_gfdl","mean_oxy_bottom_ipsl","mean_oxy_bottom_hadl")
+
+purrr::map(model_var, plot_map_direct, df_name = df_summ, return_plot=T)
+```
+
+And save a tibble
+
+```{r}
+maps_df <- purrr::map(model_var, plot_map_direct, df_name = df_summ, return_plot=F)
+write_rds(maps_df, here::here('data','Projection Summaries','mean_bt_ox_allmodels_formaps.rds'))
+
+```
+
+Note this output is a list of 6 tibbles, one for each model-variable combination and in the order specified by `model_var`.
 
 # Hovmoller plots
 
