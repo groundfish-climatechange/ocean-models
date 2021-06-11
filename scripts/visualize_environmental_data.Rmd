@@ -376,6 +376,8 @@ plot_map_direct <- function(df_name, var_name, return_plot=T){
 # map1
 
 
+# inspired by: https://github.com/stephbrodie1/WRAP_Location_CaseStudy/blob/master/SummaryPlots.R
+
 ```
 
 Try it out
@@ -401,3 +403,70 @@ Note this output is a list of 6 tibbles, one for each model-variable combination
 
 Plot latitude and year with the variable represented by colors
 
+Start by writing a function to summarise the the rolling average of temp and O2, by latutude and year
+
+```{r}
+# df_name <- df_summ_gfish
+# lagyears=10
+
+make_df_hov <- function(df_name, var_name, lagyears=10){
+  df_hov <- df_name %>%
+  group_by(year,lat) %>%
+  summarise(
+    tenyrmean = rollapply(.data[[var_name]], # variable to lag
+                                                       FUN=mean, # function to apply
+                                                       align='right', # tells the function to lag, not lead
+                                                       width=lagyears, # how big of a window
+                                                       fill=NA, # value to fill when an observation doesn't exist
+                                                       partial=1, # minimum window size for partial computations
+                                                       na.rm=T)
+  ) %>%
+    mutate(latbin=29+findInterval(lat,vec=seq(30,50,by=1)))
+  return(df_hov)
+}
+
+```
+
+Now apply the function and save a list of tibbles
+
+```{r}
+# i want to apply purrr::map  across a list of var_name using the function plot_ts_direct() with other arguments set to constant
+model_var <- c("mean_bt_gfdl", "mean_bt_ipsl", "mean_bt_hadl", "mean_oxy_bottom_gfdl","mean_oxy_bottom_ipsl","mean_oxy_bottom_hadl")
+
+hov_df <- purrr::map(model_var, make_df_hov, df_name = df_summ_gfish, lagyears=10)
+write_rds(hov_df, here::here('data','Projection Summaries','10yrmean_bt_ox_allmodels_forhovmollers.rds'))
+
+```
+
+Now make some plots [still in progress]
+
+```{r}
+
+# # label for plot
+#     pt <- case_when(
+#       grepl('oxy_bottom_ipsl',var_name) ~ "IPSL Oxygen",
+#       grepl('mean_bt_ipsl',var_name) ~ "IPSL Temperature",
+#       grepl('mean_oxy_bottom_gfdl',var_name) ~ "GFDL Oxygen",
+#       grepl('mean_bt_gfdl',var_name) ~ "GFDL Temperature",
+#       grepl('mean_oxy_bottom_hadl',var_name) ~ "HAD Oxygen",
+#       grepl('mean_bt_hadl',var_name) ~ "HAD Temperature",
+#     )
+#     lab <- ifelse(grepl('bt',var_name),"Bottom Temperature","Bottom Oxygen")
+
+
+p_hov <- hov_df[[6]] %>% 
+      ggplot(aes(x=year, y=latbin)) + 
+      geom_tile(aes(fill=tenyrmean)) +
+      theme_classic() + labs(y="Year", x="Latitude", title = pt) + 
+      theme(legend.position="right",
+            legend.title = element_blank(),
+            plot.title = element_text(size = 14),
+            plot.subtitle = element_text(size = 12)) +
+      theme( panel.border = element_rect(colour = "black", fill=NA, size=1)) + #makes a box
+      scale_fill_gradient2(
+        name=lab,
+        low = 'blue', mid = 'white', high = 'red',
+        midpoint = 0,
+        limits = c(min(hov_df[[6]]$tenyrmean), max(hov_df[[6]]$tenyrmean))
+      )
+```
