@@ -449,7 +449,8 @@ Now apply the function and save a list of tibbles
 model_var <- c("mean_bt_gfdl", "mean_bt_ipsl", "mean_bt_hadl", "mean_oxy_bottom_gfdl","mean_oxy_bottom_ipsl","mean_oxy_bottom_hadl")
 
 hov_df <- purrr::map(model_var, make_df_hov, df_name = df_summ_gfish, lagyears=10)
-write_rds(hov_df, here::here('data','Projection Summaries','10yrmean_bt_ox_allmodels_forhovmollers.rds'))
+write_rds(hov_df, here::here('data','Projection Summaries','10yrmean_150to300m_bt_ox_allmodels_forhovmollers.rds'))
+# write_rds(hov_df, here::here('data','Projection Summaries','10yrmean_bt_ox_allmodels_forhovmollers.rds'))
 
 ```
 
@@ -469,7 +470,7 @@ Now make some plots [still in progress]
 #     lab <- ifelse(grepl('bt',var_name),"Bottom Temperature","Bottom Oxygen")
 
 
-p_hov <- hov_df[[6]] %>% 
+p_hov <- hov_df[[3]] %>% 
       ggplot(aes(x=year, y=latbin)) + 
       geom_tile(aes(fill=tenyrmean)) +
       theme_classic() + labs(x="Year", y="Latitude", title = pt) + 
@@ -482,6 +483,6 @@ p_hov <- hov_df[[6]] %>%
         name=lab,
         low = 'blue', mid = 'white', high = 'red',
         midpoint = 0,
-        limits = c(min(hov_df[[6]]$tenyrmean), max(hov_df[[6]]$tenyrmean))
+        limits = c(min(hov_df[[3]]$tenyrmean), max(hov_df[[3]]$tenyrmean))
       )
 ```
