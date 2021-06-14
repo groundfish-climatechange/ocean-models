@@ -62,6 +62,9 @@ df_summ <- read_rds(here('data','Projection Summaries','mean_bt_ox_allmodels_198
 bathy_fl <-  here('data','bottom_layer_depth.nc')
 bathy <- tidync(bathy_fl)
 print(bathy)
+ncmeta::nc_grids(bathy)
+ncmeta::nc_vars(bathy_fl)
+ncmeta::nc_atts(bathy_fl, "bld") %>% tidyr::unnest(cols = c(value)) # tells us bld data are in m
 
 bathy_df <- bathy %>% activate("D0,D1") %>% hyper_tibble() #bld: bottom layer depth, units for bld are meters, and larger values mean deeper
 
@@ -238,8 +241,8 @@ Note this output is a list of 6 tibbles, one for each model-variable combination
 
 Start by looking at 1980-2010 vs 2070-2100. Then make a difference map
 ```{r}
-df_name <- df_summ_gfish
-var_name <- 'mean_bt_gfdl'
+# df_name <- df_summ_gfish
+# var_name <- 'mean_bt_gfdl'
 
 plot_map_direct <- function(df_name, var_name, return_plot=T){
   
@@ -277,6 +280,14 @@ plot_map_direct <- function(df_name, var_name, return_plot=T){
       grepl('mean_bt_hadl',var_name) ~ "HAD Bottom Temperature",
     )
     lab <- ifelse(grepl('bt',var_name),"Bottom\nTemperature","Bottom\nOxygen")
+    # delta_ll <- ifelse(grepl('bt',var_name),
+    #                        min(c(df_name$mean_bt_gfdl, df_name$mean_bt_ipsl, df_name$mean_bt_hadl)),
+    #                        min(c(df_name$mean_oxy_gfdl, df_name$mean_oxy_ipsl, df_name$mean_oxy_hadl))
+    # )
+    # delta_ul <- ifelse(grepl('bt',var_name), 
+    #                    max(c(df_name$mean_bt_gfdl, df_name$mean_bt_ipsl, df_name$mean_bt_hadl)), 
+    #                    max(c(df_name$mean_oxy_gfdl, df_name$mean_oxy_ipsl, df_name$mean_oxy_hadl))
+    # )
     
     # make plots
     p_begin <- df_begin %>% 
@@ -324,7 +335,8 @@ plot_map_direct <- function(df_name, var_name, return_plot=T){
         name=lab,
         low = 'blue', mid = 'white', high = 'red',
         midpoint = 0,
-        limits = c(min(df_delta$delta), max(df_delta$delta))
+        limts = c(min(df_delta$delta), max(df_delta$delta))
+        #limits = delta_limits
       ) +
       # scale_fill_gradientn(colours = colorRampPalette(colors = c("#3498db", "white", "#e74c3c"))(256), 
       #                      limits = c(min(df_delta$delta), max(df_delta$delta)),
@@ -408,9 +420,12 @@ Start by writing a function to summarise the the rolling average of temp and O2,
 ```{r}
 # df_name <- df_summ_gfish
 # lagyears=10
+# var_name = "mean_bt_gfdl"
+# quantile(df_summ_gfish$bld)
 
 make_df_hov <- function(df_name, var_name, lagyears=10){
   df_hov <- df_name %>%
+  filter( between (bld, 150, 300) ) %>% # choose only depths from 150-300m
   group_by(year,lat) %>%
   summarise(
     tenyrmean = rollapply(.data[[var_name]], # variable to lag
@@ -457,7 +472,7 @@ Now make some plots [still in progress]
 p_hov <- hov_df[[6]] %>% 
       ggplot(aes(x=year, y=latbin)) + 
       geom_tile(aes(fill=tenyrmean)) +
-      theme_classic() + labs(y="Year", x="Latitude", title = pt) + 
+      theme_classic() + labs(x="Year", y="Latitude", title = pt) + 
       theme(legend.position="right",
             legend.title = element_blank(),
             plot.title = element_text(size = 14),

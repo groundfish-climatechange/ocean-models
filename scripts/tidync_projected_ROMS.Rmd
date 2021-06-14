@@ -11,6 +11,7 @@ library(tidync)
 library(here)
 library(lubridate)
 library(here)
+library(zoo)
 # library(ncdf4)
 # library(raster)
 knitr::opts_chunk$set(echo = TRUE)
@@ -73,18 +74,40 @@ z <- y %>%
   mutate(year=1980) %>% 
   ungroup()
 # seems to work
+
+# figure out the index value for July 31, the midpoint of the survey months = 92
+# take a slice of data for this time index
+midsurvey_index <- min(x) + 91
+y2 <- bt_gfdl %>% hyper_filter(time=index%in%midsurvey_index) %>% hyper_tibble()
+
+# calculate the 30d avg bt leading up to july 31. JS adapted this from the append_lag() function Owen wrote for prepare_hindcast_ROMS.Rmd
+lagdays=30
+z2 <- y2 %>% 
+  group_by(longitude,latitude) %>% 
+  summarise(
+    mean_bt_30d = rollapply(bt, # variable to lag
+                                                       FUN=mean, # function to apply
+                                                       align='right', # tells the function to lag, not lead
+                                                       width=lagdays, # how big of a window
+                                                       fill=NA, # value to fill when an observation doesn't exist
+                                                       partial=1, # minimum window size for partial computations
+                                                       na.rm=T)) %>% 
+  mutate(year=1980) %>% 
+  ungroup()
+# seems to work
+
 ```
 
 # Annual Summary Function
 
-Okay this general workflow seems to work. Let's write a function and make a loop to apply this to all years in the data.
+Okay this general workflow seems to work. Let's write a function and make a loop to apply this to all years in the data. The resulting tibble will include the average value of the environmental variable each year, along with the average value of that environmental variable over the 30d leading up to July 31 (the midpoint of the trawl survey season) each year.
 
 ```{r}
 
-ncdf_file <- here('data','Projection NCDFs','oxygen_bottom_daily_roms_gfdl_1980_2100.nc')
-yr <- 2000
+# ncdf_file <- here('data','Projection NCDFs','oxygen_bottom_daily_roms_gfdl_1980_2100.nc')
+# yr <- 2000
 
-pull_season_df <- function(ncdf_file,yr){
+pull_season_df <- function(ncdf_file, yr, lagdays=30, lagdaysintosurvey=91){
   # load the file reference
   nc <- tidync(ncdf_file)
   
@@ -92,24 +115,50 @@ pull_season_df <- function(ncdf_file,yr){
   v <- hyper_vars(nc) %>% pluck("name")
   # output variable name
   out <- paste0("mean_",v)
+  out2 <- paste0("mean_",v,"_30d")
   
   # find the appropriate time reference (may to october of the given year)
   tm <- time_reference %>% 
     filter(year==yr,month>=5,month<=10) %>% 
     pluck('idx')
   
+  # figure out the index value for July 31, the midpoint of the survey months = 92
+  # take a slice of data for this time index
+  midsurvey_index <- min(tm) + lagdaysintosurvey
+  
   # extract and summarize the data across the season for each lat/lon
   dat <- nc %>% 
     hyper_filter(time=index%in%tm) %>%
     hyper_tibble() %>% 
     group_by(longitude,latitude) %>% 
-    summarise(!!out:=mean(!!sym(v))) %>% 
+    summarise(
+      !!out:=mean(!!sym(v))
+    ) %>% 
     mutate(year=yr) %>% 
     ungroup()
   
+  dat1 <- nc %>% 
+    hyper_filter(time=index%in%midsurvey_index) %>%
+    hyper_tibble() %>% 
+    group_by(longitude,latitude) %>% 
+    summarise(
+      !!out2:= rollapply(!!sym(v), # variable to lag
+                                                       FUN=mean, # function to apply
+                                                       align='right', # tells the function to lag, not lead
+                                                       width=lagdays, # how big of a window
+                                                       fill=NA, # value to fill when an observation doesn't exist
+                                                       partial=1, # minimum window size for partial computations
+                                                       na.rm=T)
+      ) %>% 
+    mutate(year=yr) %>% 
+    ungroup()
+  
+  dat2 <- dat %>%
+    left_join(dat1)
+  
   print(paste("Extracted",out,"for",yr))
   # return the summarized dataframe
-  return(dat)
+  return(dat2)
 }
 ```
 
@@ -171,21 +220,32 @@ proc.time()-t
 ```{r}
 
 df_summ <- bt_gfdl_summ %>%
-  rename(mean_bt_gfdl = mean_bt) %>%
+  rename(mean_bt_gfdl = mean_bt,
+         mean_bt_30d_gfdl = mean_bt_30d) %>%
   left_join(
-    bt_ipsl_summ %>% rename( mean_bt_ipsl = mean_bt)
+    bt_ipsl_summ %>% 
+      rename( mean_bt_ipsl = mean_bt,
+              mean_bt_30d_ipsl = mean_bt_30d)
   ) %>%
   left_join(
-    bt_had_summ %>% rename( mean_bt_hadl = mean_bt)
+    bt_had_summ %>% 
+      rename( mean_bt_hadl = mean_bt,
+              mean_bt_30d_hadl = mean_bt_30d)
   ) %>%
   left_join(
-    oxygen_bottom_gfdl_summ %>% rename( mean_oxy_bottom_gfdl = mean_oxy_bottom)
+    oxygen_bottom_gfdl_summ %>% 
+      rename( mean_oxy_bottom_gfdl = mean_oxy_bottom,
+              mean_oxy_bottom_30d_gfdl = mean_oxy_bottom_30d)
   ) %>%
   left_join(
-    oxygen_bottom_ipsl_summ %>% rename( mean_oxy_bottom_ipsl = mean_oxy_bottom)
+    oxygen_bottom_ipsl_summ %>% 
+      rename( mean_oxy_bottom_ipsl = mean_oxy_bottom,
+              mean_oxy_bottom_30d_ipsl = mean_oxy_bottom_30d)
   ) %>%
   left_join(
-    oxygen_bottom_had_summ %>% rename( mean_oxy_bottom_hadl = mean_oxy_bottom)
+    oxygen_bottom_had_summ %>% 
+      rename( mean_oxy_bottom_hadl = mean_oxy_bottom,
+              mean_oxy_bottom_30d_hadl = mean_oxy_bottom_30d)
   ) 
 glimpse(df_summ)
 
@@ -213,6 +273,7 @@ glimpse(df_summ)
 
 ```{r}
 
-write_rds(df_summ,here('data','mean_bt_ox_allmodels_1980_2100.rds'))
+# write_rds(df_summ,here('data','mean_bt_ox_allmodels_1980_2100.rds'))
+write_rds(df_summ,here('data','mean_30dmean_bt_ox_allmodels_1980_2100.rds'))
 
 ```
