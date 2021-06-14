@@ -55,6 +55,9 @@
 # Output files from R CMD check
 /*.Rcheck/
 
+# weird mac issue?
+/Icon
+
 # RStudio files
 .Rproj.user/
 
