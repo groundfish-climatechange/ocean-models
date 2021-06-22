@@ -77,4 +77,7 @@ vignettes/*.pdf
 # R package: bookdown caching files
 /*_files/
 
+# Dropbox nonsense
+Icon[\r]
+
 # End of https://www.gitignore.io/api/r,data
